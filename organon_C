@@ -1,0 +1,8 @@
+contraseña de aplicacion "reporte_organon"
+jwvj drvm przr wzxy
+
+anotaciones febrero:
+
+si los datos de No de Factura, UUID y total es igual que las Referencias que sean iguales excepto  por la terminacion "-1" 
+se anote en la que no lo tiene  un nuevo campo llamado "Observaciones" 
+y se anote el texto "Rectificacion de {referencia de la terminación "-1}"
