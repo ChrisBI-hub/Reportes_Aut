@@ -27,12 +27,12 @@ EMAIL_USER = "reportes.bi@abcsc.mx"
 EMAIL_PASS = "jwvjdrvmprzrwzxy" 
 
 # --- LISTAS DE CONTACTOS ---
-PARA = ["facturacion2@abcsc.mx"]
-CC = ["ymontoya@abcsc.mx", "contraloria@abcsc.mx"]
-CCO = ["administracion2@abcsc.mx", "ccarbajal@abcsc.mx"]
+PARA = ["fdaniel.alvarado2@organon.com", "maria.solano@organon.com", "angela.cristina.jimenez@organon.com","brayan.perez@organon.com","andrea.huerta@organon.com","dilan.lagunas@organon.com","martha.laura.gonzalez@organon.com"]
+CC = ["ymontoya@abcsc.mx", "contraloria@abcsc.mx","jtorres@abcsc.mx","administracion2@abcsc.mx"]
+CCO = ["ccarbajal@abcsc.mx","facturacion2@abcsc.mx"]
 
 # --- RUTAS Y ASUNTO DINÁMICOS ---
-ASUNTO = f"Reporte Aduanal Organon - {MES_TEXTO} {ANIO}"
+ASUNTO = f"REPORTE DE ORGANON Y UNDRA - {MES_TEXTO} {ANIO}"
 # Se construye la ruta usando MES_NUMERO (ej: Reporte_organon_03.xlsx)
 RUTA_ARCHIVO = f"/home/christian/Documentos/Reportes_Aut/Reporte_organon_{MES_NUMERO}.xlsx"
 
