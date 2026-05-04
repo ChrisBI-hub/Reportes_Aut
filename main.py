@@ -170,7 +170,11 @@ def paso_2_extraccion_manzanillo(mes, año):
     mod.FECHA_FIN         = fecha_fin
     mod.ARCHIVO_EXCEL_FINAL = os.path.join(PATH_BASE, f"REPORTE_MAESTRO_{año}_{mes:02d}.xlsx")
 
-    mod.SuperScraperCorresponsalias(headless=False).ejecutar()
+    resultado = mod.SuperScraperCorresponsalias(headless=False).ejecutar()
+    if resultado is False:
+        print("  ℹ️  El pipeline continuará sin archivo de corresponsalías Manzanillo.")
+    elif resultado is None:
+        print("  ⚠️  No se pudo consultar Manzanillo por SQL. El pipeline seguirá, pero revisa la conectividad si esperabas datos.")
 
 
 def paso_3_laredo_y_analisis(mes, año):

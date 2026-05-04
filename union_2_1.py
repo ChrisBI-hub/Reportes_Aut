@@ -29,16 +29,14 @@ def unificar_reportes():
     
     existe_maestro = os.path.exists(ARCHIVO_MAESTRO)
     existe_laredo = len(archivos_laredo) > 0
-
-    if not existe_maestro and not existe_laredo:
-        print("No hay operaciones en corresponsalías que agregar")
-        return
-
-    print("🚀 Iniciando unificación de reportes...")
     
     if not os.path.exists(ARCHIVO_ADUANAL):
         print(f"❌ Error: El archivo base {ARCHIVO_ADUANAL} no existe.")
         return
+
+    print("🚀 Iniciando unificación de reportes...")
+    if not existe_maestro and not existe_laredo:
+        print("ℹ️ No hay operaciones en corresponsalías que agregar. Se generará el reporte con la base aduanal.")
 
     # 1. Leer Base Aduanal
     df_base = pd.read_excel(ARCHIVO_ADUANAL, sheet_name='RESUMEN_TOTAL')
@@ -50,12 +48,18 @@ def unificar_reportes():
     if existe_maestro:
         print("✅ Procesando Archivo Maestro (Manzanillo)...")
         df_maestro = pd.read_excel(ARCHIVO_MAESTRO)
-        df_maestro['Ref_Key'] = df_maestro['Referencia_Original'].astype(str).str.strip().str.upper()
-        df_maestro['Total_Key'] = limpiar_monto(df_maestro['Importe'])
-        
-        df_portal_sub = df_maestro[['Ref_Key', 'Total_Key', 'Fecha de Pago', 'Descripcion_Consolidada', 'Factura', 'Emisor_fac']].copy()
-        df_portal_sub.columns = ['Ref_Key', 'Total_Key', 'FP_Port', 'Desc_Port', 'Fact_Port', 'Prov_Port']
-        df_unificado = pd.merge(df_base, df_portal_sub, on=['Ref_Key', 'Total_Key'], how='left')
+        if df_maestro.empty:
+            print("ℹ️ Archivo Maestro vacío. Se omite el cruce de Manzanillo.")
+            df_unificado = df_base.copy()
+            for col in ['FP_Port', 'Desc_Port', 'Fact_Port', 'Prov_Port']:
+                df_unificado[col] = np.nan
+        else:
+            df_maestro['Ref_Key'] = df_maestro['Referencia_Original'].astype(str).str.strip().str.upper()
+            df_maestro['Total_Key'] = limpiar_monto(df_maestro['Importe'])
+            
+            df_portal_sub = df_maestro[['Ref_Key', 'Total_Key', 'Fecha de Pago', 'Descripcion_Consolidada', 'Factura', 'Emisor_fac']].copy()
+            df_portal_sub.columns = ['Ref_Key', 'Total_Key', 'FP_Port', 'Desc_Port', 'Fact_Port', 'Prov_Port']
+            df_unificado = pd.merge(df_base, df_portal_sub, on=['Ref_Key', 'Total_Key'], how='left')
     else:
         df_unificado = df_base.copy()
         for col in ['FP_Port', 'Desc_Port', 'Fact_Port', 'Prov_Port']:

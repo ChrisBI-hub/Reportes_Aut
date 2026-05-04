@@ -71,7 +71,8 @@ class SuperScraperCorresponsalias:
                 df_refs = pd.read_sql(sa.text(query), conn)
             return df_refs['Referencia'].tolist()
         except Exception as e:
-            logger.error(f"❌ Error SQL: {e}"); return []
+            logger.error(f"❌ Error SQL: {e}")
+            return None
 
     def configurar_driver(self):
         options = webdriver.FirefoxOptions()
@@ -243,12 +244,14 @@ class SuperScraperCorresponsalias:
     def ejecutar(self):
         refs = self.obtener_referencias_sql()
         
-        # --- NUEVA VALIDACIÓN ---
+        if refs is None:
+            logger.error("❌ No fue posible obtener referencias desde SQL.")
+            return None
+
         if not refs:
             print("No hay Referencias de Manzanillo este mes")
-            logger.info("Terminando script por falta de datos en SQL.")
-            return
-        # ------------------------
+            logger.info("Terminando script porque no hay referencias de Manzanillo en el periodo.")
+            return False
 
         try:
             self.configurar_driver()
@@ -258,10 +261,14 @@ class SuperScraperCorresponsalias:
             self.driver = None
             self.limpiar_copias()
             self.analizar_archivos()
-            logger.info("🎉 Proceso Finalizado.")
+            return True
+        except Exception:
+            raise
         finally:
-            if self.driver: 
+            if self.driver is not None:
                 self.driver.quit()
+                self.driver = None
+            logger.info("🎉 Proceso Finalizado.")
 
 if __name__ == "__main__":
     SuperScraperCorresponsalias(headless=False).ejecutar()
