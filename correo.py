@@ -56,11 +56,6 @@ Les adjunto el reporte de Organon generado de manera automática.
 Se adjunta el Reporte Aduanal de Organon correspondiente al mes de {MES_TEXTO} {ANIO}.
 El archivo ya incluye la separación por pestañas de cada referencia y la validación de datos.
 
-Este mensaje es provisional para validar la correcta recepción del archivo y la legibilidad de su contenido, 
-por lo que agradecería sus comentarios para estructurar un mensaje para el cliente.
-
-De igual forma, me podrías adjuntar los correos de los contactos que deberían recibir este reporte para incluirlos en la lista de destinatarios.
-
 Quedamos a su disposición para cualquier duda.
 
 Saludos,
