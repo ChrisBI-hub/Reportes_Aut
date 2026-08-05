@@ -28,7 +28,7 @@ EMAIL_PASS = "jwvjdrvmprzrwzxy"
 
 # --- LISTAS DE CONTACTOS ---
 PARA = ["daniel.alvarado2@organon.com", "maria.solano@organon.com", "angela.cristina.jimenez@organon.com","brayan.perez@organon.com","andrea.huerta@organon.com","dilan.lagunas@organon.com","martha.laura.gonzalez@organon.com"]
-CC = ["ymontoya@abcsc.mx", "contraloria@abcsc.mx","administracion2@abcsc.mx"]
+CC = ["ymontoya@abcsc.mx", "atrujillo@abcsc.mx","administracion2@abcsc.mx"]
 CCO = ["ccarbajal@abcsc.mx","facturacion2@abcsc.mx"]
 
 # --- RUTAS Y ASUNTO DINÁMICOS ---

@@ -35,8 +35,8 @@ from selenium.webdriver.common.keys import Keys
  
 USUARIO_WEB = "ORGA26*"
 CONTRA_WEB  = "ORGA26*"
-URL_LOGIN   = "http://slamnetlaredo.alvelais.mx/slamdigital4/default.aspx"
-URL_BASE    = "http://slamnetlaredo.alvelais.mx/slamdigital4"
+URL_LOGIN   = "https://slamnldo.alvelais.mx/slamdigital4/default.aspx"
+URL_BASE    = "http://slamnldo.alvelais.mx/slamdigital4"
  
 MES_VALIDACION  = 2
 ANIO_VALIDACION = 2026
