@@ -137,6 +137,35 @@ def confirmar(pregunta):
     r = input(f"\n  {pregunta} [s/N]: ").strip().lower()
     return r in ("s", "si", "sí", "y", "yes")
 
+
+def elegir_archivo_revisado(mes):
+    """
+    Cuando Claudia ya revisó el reporte, pregunta qué archivo usar:
+    el generado por defecto (si no hubo errores) o uno diferente
+    (si Claudia lo reenvió con modificaciones).
+    """
+    archivo_default = os.path.join(PATH_BASE, f"Reporte_organon_{mes:02d}.xlsx")
+
+    print(f"\n  📄 Archivo generado por defecto: {archivo_default}")
+    print("  ¿Qué archivo deseas usar para el envío final?")
+    print("    1) El generado por defecto (Claudia no encontró errores)")
+    print("    2) Uno diferente (Claudia lo reenvió con modificaciones)")
+
+    opcion = input("  Selecciona una opción [1/2]: ").strip()
+
+    if opcion == "2":
+        while True:
+            ruta = input("  Ingresa la ruta del archivo con las modificaciones: ").strip()
+            if not os.path.isabs(ruta):
+                ruta = os.path.join(PATH_BASE, ruta)
+            if os.path.isfile(ruta):
+                print(f"  ✅ Se usará: {ruta}")
+                return ruta
+            print(f"  ⚠️  No se encontró el archivo: {ruta}")
+
+    print(f"  ✅ Se usará el archivo por defecto: {archivo_default}")
+    return archivo_default
+
 # ===========================================================================
 # PASOS DEL PIPELINE
 # ===========================================================================
@@ -236,11 +265,9 @@ def paso_6a_envio_revision(mes, año):
     print("  ℹ️  Cuando confirme, ejecuta nuevamente desde el paso 6.")
 
 
-def paso_6b_envio_final(mes, año):
+def paso_6b_envio_final(mes, año, archivo_final):
     """Limpia descargas, separa por pestañas y envía al cliente."""
     titulo("PASO 6a — Limpieza + Separación + Envío Final")
-
-    archivo_final = os.path.join(PATH_BASE, f"Reporte_organon_{mes:02d}.xlsx")
 
     # Limpieza de carpetas de descargas temporales
     titulo("Limpiando carpetas temporales  |  limpieza.py", nivel=2)
@@ -330,7 +357,8 @@ def main():
     print(f"  📋 Reporte listo: Reporte_organon_{mes:02d}.xlsx")
 
     if confirmar("¿Ya fue revisado y aprobado por Claudia?"):
-        paso_6b_envio_final(mes, año)
+        archivo_final = elegir_archivo_revisado(mes)
+        paso_6b_envio_final(mes, año, archivo_final)
     else:
         paso_6a_envio_revision(mes, año)
 
