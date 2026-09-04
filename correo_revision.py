@@ -32,8 +32,8 @@ RUTA_ARCHIVO = f"/home/christian/Documentos/Reportes_Aut/Reporte_organon_{MES_DI
 
 # --- DESTINATARIOS ---
 PARA = ["facturacion2@abcsc.mx"]
-CC = ["ymontoya@abcsc.mx"]
-CCO = ["administracion2@abcsc.mx", "ccarbajal@abcsc.mx"]
+CC = ["administracion2@abcsc.mx"]
+CCO = ["imedrano@abcsc.mx", "ccarbajal@abcsc.mx"]
 
 ASUNTO = f"Reporte Aduanal Organon - {MES_NOMBRE} {ANIO}"
 
