@@ -21,6 +21,7 @@ Uso:
 import os
 import re
 import sys
+import shutil
 import importlib.util
 import calendar
 import argparse
@@ -31,6 +32,11 @@ from datetime import date, timedelta
 # ===========================================================================
 
 PATH_BASE = "/home/christian/Documentos/Reportes_Aut"
+
+# Archivo marcador que solo existe en la máquina local de trabajo (fuera de
+# PATH_BASE, para que sobreviva a la limpieza final). Su presencia es lo
+# único que habilita el borrado automático de la carpeta del proyecto.
+MARCADOR_MAQUINA_LOCAL = os.path.expanduser("~/.reportes_aut_local")
 
 MESES_ES = {
     1: "Enero",    2: "Febrero",   3: "Marzo",    4: "Abril",
@@ -289,6 +295,56 @@ def paso_6b_envio_final(mes, año, archivo_final):
 
     print(f"\n  ✅ Reporte de {MESES_ES[mes]} {año} enviado al cliente.")
 
+def es_maquina_local():
+    """
+    True solo si existe el archivo marcador fuera del repo (ver
+    MARCADOR_MAQUINA_LOCAL). Evita que la limpieza automática borre la
+    carpeta del proyecto en cualquier entorno que no sea la máquina de
+    trabajo local (ej. CI, contenedores, otra copia del repo).
+    """
+    return os.path.isfile(MARCADOR_MAQUINA_LOCAL)
+
+
+def mostrar_aviso_limpieza():
+    """Muestra una ventana emergente confirmando que la limpieza terminó."""
+    mensaje = "Reporte completado, limpieza local completa, revisar reportes.bi@abcsc.mx"
+    try:
+        import tkinter as tk
+        from tkinter import messagebox
+
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showinfo("Reporte Mensual Organon", mensaje)
+        root.destroy()
+    except Exception:
+        # Si no hay entorno gráfico disponible, al menos deja constancia en consola.
+        print(f"\n  🪟 {mensaje}")
+
+
+def limpieza_local_final():
+    """
+    Elimina la carpeta raíz del proyecto (PATH_BASE) SOLO en la máquina
+    local de trabajo, para liberar espacio en disco una vez que el reporte
+    ya fue respaldado. No hace nada si no se detecta el marcador de
+    máquina local (ver es_maquina_local).
+    """
+    if not es_maquina_local():
+        print("\n  ℹ️  No se detectó marcador de máquina local "
+              f"({MARCADOR_MAQUINA_LOCAL}): se omite la limpieza de la carpeta del proyecto.")
+        return
+
+    titulo("LIMPIEZA LOCAL — Eliminando carpeta del proyecto")
+    print(f"  🗑️  Eliminando: {PATH_BASE}")
+
+    # Salir de PATH_BASE antes de borrarlo, para no eliminar el directorio
+    # de trabajo mientras está en uso por este mismo proceso.
+    os.chdir(os.path.dirname(PATH_BASE) or "/")
+    shutil.rmtree(PATH_BASE)
+
+    print("  ✅ Carpeta del proyecto eliminada.")
+    mostrar_aviso_limpieza()
+
+
 # ===========================================================================
 # MAIN
 # ===========================================================================
@@ -363,6 +419,8 @@ def main():
         paso_6a_envio_revision(mes, año)
 
     titulo(f"✅  PROCESO COMPLETADO — {MESES_ES[mes]} {año}")
+
+    limpieza_local_final()
 
 
 if __name__ == "__main__":
