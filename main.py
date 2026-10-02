@@ -22,6 +22,7 @@ import os
 import re
 import sys
 import shutil
+import subprocess
 import importlib.util
 import calendar
 import argparse
@@ -321,25 +322,64 @@ def mostrar_aviso_limpieza():
         print(f"\n  🪟 {mensaje}")
 
 
+def detectar_ruta_proyecto():
+    """
+    Detecta la raíz real del repositorio git en ESTA máquina, en lugar de
+    confiar en PATH_BASE (que es fijo y no coincide con la ruta de clonado
+    en cada equipo, sobre todo en Windows). Equivale a lo que reporta
+    `git rev-parse --show-toplevel` ejecutado desde la carpeta del proyecto
+    en la terminal (ej. la terminal integrada de VS Code).
+
+    Devuelve None si no se puede detectar (por ejemplo, si git no está
+    disponible o la carpeta ya no es un repositorio git).
+    """
+    try:
+        resultado = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        ruta = resultado.stdout.strip()
+        return os.path.normpath(ruta) if ruta else None
+    except Exception:
+        return None
+
+
 def limpieza_local_final():
     """
-    Elimina la carpeta raíz del proyecto (PATH_BASE) SOLO en la máquina
-    local de trabajo, para liberar espacio en disco una vez que el reporte
-    ya fue respaldado. No hace nada si no se detecta el marcador de
-    máquina local (ver es_maquina_local).
+    Elimina la carpeta raíz del proyecto SOLO en la máquina local de
+    trabajo, para liberar espacio en disco una vez que el reporte ya fue
+    respaldado. No hace nada si no se detecta el marcador de máquina local
+    (ver es_maquina_local).
+
+    La ruta a eliminar se detecta vía git (ver detectar_ruta_proyecto) para
+    que funcione igual sin importar en qué carpeta/unidad esté clonado el
+    repositorio en cada máquina (ej. Windows vs. Linux). Si git no logra
+    detectarla, se usa PATH_BASE como respaldo.
     """
     if not es_maquina_local():
         print("\n  ℹ️  No se detectó marcador de máquina local "
               f"({MARCADOR_MAQUINA_LOCAL}): se omite la limpieza de la carpeta del proyecto.")
         return
 
-    titulo("LIMPIEZA LOCAL — Eliminando carpeta del proyecto")
-    print(f"  🗑️  Eliminando: {PATH_BASE}")
+    ruta_proyecto = detectar_ruta_proyecto() or PATH_BASE
 
-    # Salir de PATH_BASE antes de borrarlo, para no eliminar el directorio
+    # Verificación de cordura: la ruta debe existir y contener este mismo
+    # main.py, para no borrar por error una carpeta distinta.
+    if not ruta_proyecto or not os.path.isfile(os.path.join(ruta_proyecto, "main.py")):
+        print(f"\n  ⚠️  No se pudo confirmar la ruta del proyecto ({ruta_proyecto!r}). "
+              "Se omite la limpieza por seguridad.")
+        return
+
+    titulo("LIMPIEZA LOCAL — Eliminando carpeta del proyecto")
+    print(f"  🗑️  Eliminando: {ruta_proyecto}")
+
+    # Salir de la carpeta antes de borrarla, para no eliminar el directorio
     # de trabajo mientras está en uso por este mismo proceso.
-    os.chdir(os.path.dirname(PATH_BASE) or "/")
-    shutil.rmtree(PATH_BASE)
+    os.chdir(os.path.dirname(ruta_proyecto) or "/")
+    shutil.rmtree(ruta_proyecto)
 
     print("  ✅ Carpeta del proyecto eliminada.")
     mostrar_aviso_limpieza()
