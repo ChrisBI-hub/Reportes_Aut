@@ -387,40 +387,46 @@ def main():
 
     os.chdir(PATH_BASE)
 
+    # La limpieza local (ver limpieza_local_final) se ejecuta siempre al
+    # final, sin importar si el pipeline terminó bien o falló en cualquier
+    # paso (incluido el envío de correo). Esto evita que máquinas con
+    # versiones viejas o errores a medias se queden con carpetas desactualizadas
+    # tras el `git pull`: siempre arrancan de cero en la siguiente corrida.
     try:
-        if paso_inicio <= 1:
-            paso_1_extraccion_base(mes, año)
+        try:
+            if paso_inicio <= 1:
+                paso_1_extraccion_base(mes, año)
 
-        if paso_inicio <= 2:
-            paso_2_extraccion_manzanillo(mes, año)
+            if paso_inicio <= 2:
+                paso_2_extraccion_manzanillo(mes, año)
 
-        if paso_inicio <= 3:
-            paso_3_laredo_y_analisis(mes, año)
+            if paso_inicio <= 3:
+                paso_3_laredo_y_analisis(mes, año)
 
-        if paso_inicio <= 4:
-            paso_4_union(mes, año)
+            if paso_inicio <= 4:
+                paso_4_union(mes, año)
 
-        if paso_inicio <= 5:
-            paso_5_revision_profunda(mes)
+            if paso_inicio <= 5:
+                paso_5_revision_profunda(mes)
 
-    except Exception as e:
-        print(f"\n  ❌ Error en el pipeline: {e}")
-        print(f"  💡 Puedes reintentar desde el paso actual con:  python main.py --desde N")
-        raise
+            # ── Punto de decisión: ¿Ya revisó Claudia? ───────────────────────
+            print("\n" + "─" * 62)
+            print(f"  📋 Reporte listo: Reporte_organon_{mes:02d}.xlsx")
 
-    # ── Punto de decisión: ¿Ya revisó Claudia? ──────────────────────────────
-    print("\n" + "─" * 62)
-    print(f"  📋 Reporte listo: Reporte_organon_{mes:02d}.xlsx")
+            if confirmar("¿Ya fue revisado y aprobado por Claudia?"):
+                archivo_final = elegir_archivo_revisado(mes)
+                paso_6b_envio_final(mes, año, archivo_final)
+            else:
+                paso_6a_envio_revision(mes, año)
 
-    if confirmar("¿Ya fue revisado y aprobado por Claudia?"):
-        archivo_final = elegir_archivo_revisado(mes)
-        paso_6b_envio_final(mes, año, archivo_final)
-    else:
-        paso_6a_envio_revision(mes, año)
+            titulo(f"✅  PROCESO COMPLETADO — {MESES_ES[mes]} {año}")
 
-    titulo(f"✅  PROCESO COMPLETADO — {MESES_ES[mes]} {año}")
-
-    limpieza_local_final()
+        except Exception as e:
+            print(f"\n  ❌ Error en el pipeline: {e}")
+            print(f"  💡 Puedes reintentar desde el paso actual con:  python main.py --desde N")
+            raise
+    finally:
+        limpieza_local_final()
 
 
 if __name__ == "__main__":
