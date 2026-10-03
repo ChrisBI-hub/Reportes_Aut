@@ -21,6 +21,8 @@ Uso:
 import os
 import re
 import sys
+import shutil
+import subprocess
 import importlib.util
 import calendar
 import argparse
@@ -31,6 +33,11 @@ from datetime import date, timedelta
 # ===========================================================================
 
 PATH_BASE = "/home/christian/Documentos/Reportes_Aut"
+
+# Archivo marcador que solo existe en la máquina local de trabajo (fuera de
+# PATH_BASE, para que sobreviva a la limpieza final). Su presencia es lo
+# único que habilita el borrado automático de la carpeta del proyecto.
+MARCADOR_MAQUINA_LOCAL = os.path.expanduser("~/.reportes_aut_local")
 
 MESES_ES = {
     1: "Enero",    2: "Febrero",   3: "Marzo",    4: "Abril",
@@ -289,6 +296,95 @@ def paso_6b_envio_final(mes, año, archivo_final):
 
     print(f"\n  ✅ Reporte de {MESES_ES[mes]} {año} enviado al cliente.")
 
+def es_maquina_local():
+    """
+    True solo si existe el archivo marcador fuera del repo (ver
+    MARCADOR_MAQUINA_LOCAL). Evita que la limpieza automática borre la
+    carpeta del proyecto en cualquier entorno que no sea la máquina de
+    trabajo local (ej. CI, contenedores, otra copia del repo).
+    """
+    return os.path.isfile(MARCADOR_MAQUINA_LOCAL)
+
+
+def mostrar_aviso_limpieza():
+    """Muestra una ventana emergente confirmando que la limpieza terminó."""
+    mensaje = "Reporte completado, limpieza local completa, revisar reportes.bi@abcsc.mx"
+    try:
+        import tkinter as tk
+        from tkinter import messagebox
+
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showinfo("Reporte Mensual Organon", mensaje)
+        root.destroy()
+    except Exception:
+        # Si no hay entorno gráfico disponible, al menos deja constancia en consola.
+        print(f"\n  🪟 {mensaje}")
+
+
+def detectar_ruta_proyecto():
+    """
+    Detecta la raíz real del repositorio git en ESTA máquina, en lugar de
+    confiar en PATH_BASE (que es fijo y no coincide con la ruta de clonado
+    en cada equipo, sobre todo en Windows). Equivale a lo que reporta
+    `git rev-parse --show-toplevel` ejecutado desde la carpeta del proyecto
+    en la terminal (ej. la terminal integrada de VS Code).
+
+    Devuelve None si no se puede detectar (por ejemplo, si git no está
+    disponible o la carpeta ya no es un repositorio git).
+    """
+    try:
+        resultado = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        ruta = resultado.stdout.strip()
+        return os.path.normpath(ruta) if ruta else None
+    except Exception:
+        return None
+
+
+def limpieza_local_final():
+    """
+    Elimina la carpeta raíz del proyecto SOLO en la máquina local de
+    trabajo, para liberar espacio en disco una vez que el reporte ya fue
+    respaldado. No hace nada si no se detecta el marcador de máquina local
+    (ver es_maquina_local).
+
+    La ruta a eliminar se detecta vía git (ver detectar_ruta_proyecto) para
+    que funcione igual sin importar en qué carpeta/unidad esté clonado el
+    repositorio en cada máquina (ej. Windows vs. Linux). Si git no logra
+    detectarla, se usa PATH_BASE como respaldo.
+    """
+    if not es_maquina_local():
+        print("\n  ℹ️  No se detectó marcador de máquina local "
+              f"({MARCADOR_MAQUINA_LOCAL}): se omite la limpieza de la carpeta del proyecto.")
+        return
+
+    ruta_proyecto = detectar_ruta_proyecto() or PATH_BASE
+
+    # Verificación de cordura: la ruta debe existir y contener este mismo
+    # main.py, para no borrar por error una carpeta distinta.
+    if not ruta_proyecto or not os.path.isfile(os.path.join(ruta_proyecto, "main.py")):
+        print(f"\n  ⚠️  No se pudo confirmar la ruta del proyecto ({ruta_proyecto!r}). "
+              "Se omite la limpieza por seguridad.")
+        return
+
+    titulo("LIMPIEZA LOCAL — Eliminando carpeta del proyecto")
+    print(f"  🗑️  Eliminando: {ruta_proyecto}")
+
+    # Salir de la carpeta antes de borrarla, para no eliminar el directorio
+    # de trabajo mientras está en uso por este mismo proceso.
+    os.chdir(os.path.dirname(ruta_proyecto) or "/")
+    shutil.rmtree(ruta_proyecto)
+
+    print("  ✅ Carpeta del proyecto eliminada.")
+    mostrar_aviso_limpieza()
+
+
 # ===========================================================================
 # MAIN
 # ===========================================================================
@@ -331,38 +427,46 @@ def main():
 
     os.chdir(PATH_BASE)
 
+    # La limpieza local (ver limpieza_local_final) se ejecuta siempre al
+    # final, sin importar si el pipeline terminó bien o falló en cualquier
+    # paso (incluido el envío de correo). Esto evita que máquinas con
+    # versiones viejas o errores a medias se queden con carpetas desactualizadas
+    # tras el `git pull`: siempre arrancan de cero en la siguiente corrida.
     try:
-        if paso_inicio <= 1:
-            paso_1_extraccion_base(mes, año)
+        try:
+            if paso_inicio <= 1:
+                paso_1_extraccion_base(mes, año)
 
-        if paso_inicio <= 2:
-            paso_2_extraccion_manzanillo(mes, año)
+            if paso_inicio <= 2:
+                paso_2_extraccion_manzanillo(mes, año)
 
-        if paso_inicio <= 3:
-            paso_3_laredo_y_analisis(mes, año)
+            if paso_inicio <= 3:
+                paso_3_laredo_y_analisis(mes, año)
 
-        if paso_inicio <= 4:
-            paso_4_union(mes, año)
+            if paso_inicio <= 4:
+                paso_4_union(mes, año)
 
-        if paso_inicio <= 5:
-            paso_5_revision_profunda(mes)
+            if paso_inicio <= 5:
+                paso_5_revision_profunda(mes)
 
-    except Exception as e:
-        print(f"\n  ❌ Error en el pipeline: {e}")
-        print(f"  💡 Puedes reintentar desde el paso actual con:  python main.py --desde N")
-        raise
+            # ── Punto de decisión: ¿Ya revisó Claudia? ───────────────────────
+            print("\n" + "─" * 62)
+            print(f"  📋 Reporte listo: Reporte_organon_{mes:02d}.xlsx")
 
-    # ── Punto de decisión: ¿Ya revisó Claudia? ──────────────────────────────
-    print("\n" + "─" * 62)
-    print(f"  📋 Reporte listo: Reporte_organon_{mes:02d}.xlsx")
+            if confirmar("¿Ya fue revisado y aprobado por Claudia?"):
+                archivo_final = elegir_archivo_revisado(mes)
+                paso_6b_envio_final(mes, año, archivo_final)
+            else:
+                paso_6a_envio_revision(mes, año)
 
-    if confirmar("¿Ya fue revisado y aprobado por Claudia?"):
-        archivo_final = elegir_archivo_revisado(mes)
-        paso_6b_envio_final(mes, año, archivo_final)
-    else:
-        paso_6a_envio_revision(mes, año)
+            titulo(f"✅  PROCESO COMPLETADO — {MESES_ES[mes]} {año}")
 
-    titulo(f"✅  PROCESO COMPLETADO — {MESES_ES[mes]} {año}")
+        except Exception as e:
+            print(f"\n  ❌ Error en el pipeline: {e}")
+            print(f"  💡 Puedes reintentar desde el paso actual con:  python main.py --desde N")
+            raise
+    finally:
+        limpieza_local_final()
 
 
 if __name__ == "__main__":
