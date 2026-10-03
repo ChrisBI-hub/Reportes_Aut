@@ -230,6 +230,19 @@ def _odbc_driver18_presente():
         return False
 
 
+def _actualizar_apt():
+    """
+    `apt-get update` sin abortar todo si UN repositorio de terceros falla
+    (p. ej. uno ya mal configurado en el sistema). apt sigue listando los
+    demás repos igual; solo avisa en vez de levantar una excepción.
+    """
+    print("  $ sudo apt-get update")
+    resultado = subprocess.run(["sudo", "apt-get", "update"])
+    if resultado.returncode != 0:
+        print("  ⚠️  'apt-get update' reportó errores en algún repositorio de terceros; "
+              "se continúa con los paquetes que sí se pudieron listar.")
+
+
 def _instalar_requisitos_linux():
     if not _comando_disponible("apt-get"):
         print("  ⚠️  No se detectó 'apt-get'. Instala manualmente: git, python3-tk "
@@ -248,8 +261,8 @@ def _instalar_requisitos_linux():
 
     if faltantes:
         print(f"  📦 Instalando paquetes del sistema faltantes: {', '.join(faltantes)}")
+        _actualizar_apt()
         try:
-            _ejecutar(["sudo", "apt-get", "update"])
             _ejecutar(["sudo", "apt-get", "install", "-y"] + faltantes)
         except Exception as e:
             print(f"  ⚠️  No se pudieron instalar automáticamente ({e}). Instálalos a mano.")
@@ -261,19 +274,34 @@ def _instalar_requisitos_linux():
     print("  📦 Instalando 'ODBC Driver 18 for SQL Server' (repositorio oficial de Microsoft)...")
     try:
         _ejecutar(["sudo", "apt-get", "install", "-y", "curl", "gnupg2", "apt-transport-https"])
-        clave = subprocess.run(
-            ["curl", "-sSL", "https://packages.microsoft.com/keys/microsoft.asc"],
-            capture_output=True, check=True,
-        )
-        subprocess.run(["sudo", "tee", "/etc/apt/trusted.gpg.d/microsoft.asc"],
-                        input=clave.stdout, capture_output=True, check=True)
+
         lista_repo = subprocess.run(
             ["curl", "-sSL", "https://packages.microsoft.com/config/debian/12/prod.list"],
             capture_output=True, check=True,
         )
+        texto_lista = lista_repo.stdout.decode()
+
+        clave = subprocess.run(
+            ["curl", "-sSL", "https://packages.microsoft.com/keys/microsoft.asc"],
+            capture_output=True, check=True,
+        )
+
+        # El prod.list trae su propio `signed-by=<ruta>`. La clave tiene que
+        # quedar EXACTAMENTE en esa ruta o apt no la encuentra — eso fue lo
+        # que falló antes: la clave se copió a /etc/apt/trusted.gpg.d, pero
+        # el repo pedía /usr/share/keyrings/microsoft-prod.gpg.
+        rutas_keyring = {"/etc/apt/trusted.gpg.d/microsoft.asc"}
+        rutas_keyring.update(re.findall(r"signed-by=([^\]\s]+)", texto_lista))
+
+        for ruta_keyring in rutas_keyring:
+            subprocess.run(["sudo", "mkdir", "-p", os.path.dirname(ruta_keyring)], check=True)
+            subprocess.run(["sudo", "tee", ruta_keyring], input=clave.stdout,
+                            capture_output=True, check=True)
+
         subprocess.run(["sudo", "tee", "/etc/apt/sources.list.d/mssql-release.list"],
                         input=lista_repo.stdout, capture_output=True, check=True)
-        _ejecutar(["sudo", "apt-get", "update"])
+
+        _actualizar_apt()
         env = os.environ.copy()
         env["ACCEPT_EULA"] = "Y"
         _ejecutar(["sudo", "-E", "apt-get", "install", "-y", "msodbcsql18"], env=env)
