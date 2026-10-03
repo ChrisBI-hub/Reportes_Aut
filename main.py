@@ -22,6 +22,7 @@ import os
 import re
 import sys
 import shutil
+import platform
 import subprocess
 import importlib.util
 import calendar
@@ -172,6 +173,171 @@ def elegir_archivo_revisado(mes):
 
     print(f"  ✅ Se usará el archivo por defecto: {archivo_default}")
     return archivo_default
+
+# ===========================================================================
+# INSTALACIÓN DE REQUISITOS
+# ===========================================================================
+#
+# Verifica e instala, si faltan, lo necesario para que el pipeline corra
+# (driver ODBC de SQL Server, git, tkinter) y las dependencias de Python de
+# requirements.txt. Es best-effort: si algo no se puede instalar solo,
+# se imprime cómo instalarlo a mano y el pipeline continúa de todos modos.
+#
+# OJO: esto NO activa la limpieza automática de la carpeta del proyecto.
+# El marcador ~/.reportes_aut_local que la habilita sigue siendo manual,
+# a propósito, para que el borrado nunca se active sin que alguien lo haya
+# decidido explícitamente en esa máquina.
+
+
+def _comando_disponible(nombre):
+    return shutil.which(nombre) is not None
+
+
+def _ejecutar(cmd, **kwargs):
+    print(f"  $ {' '.join(cmd)}")
+    subprocess.run(cmd, check=True, **kwargs)
+
+
+def _instalar_requisitos_python():
+    """Instala las dependencias de requirements.txt si no están presentes."""
+    ruta_requirements = os.path.join(os.path.dirname(os.path.abspath(__file__)), "requirements.txt")
+    if not os.path.isfile(ruta_requirements):
+        return
+
+    try:
+        import pyodbc    # noqa: F401
+        import pandas    # noqa: F401
+        import openpyxl  # noqa: F401
+        import selenium  # noqa: F401
+        return  # las principales ya están instaladas
+    except ImportError:
+        pass
+
+    print("  📦 Instalando dependencias de Python (requirements.txt)...")
+    try:
+        _ejecutar([sys.executable, "-m", "pip", "install", "-r", ruta_requirements])
+    except Exception as e:
+        print(f"  ⚠️  No se pudieron instalar automáticamente ({e}). "
+              f"Instálalas a mano con:  pip install -r requirements.txt")
+
+
+def _odbc_driver18_presente():
+    """Usa pyodbc (ya instalado por el paso anterior) para ver si el driver nativo está registrado."""
+    try:
+        import pyodbc
+        return "ODBC Driver 18 for SQL Server" in pyodbc.drivers()
+    except Exception:
+        return False
+
+
+def _instalar_requisitos_linux():
+    if not _comando_disponible("apt-get"):
+        print("  ⚠️  No se detectó 'apt-get'. Instala manualmente: git, python3-tk "
+              "y 'ODBC Driver 18 for SQL Server'.")
+        return
+
+    faltantes = []
+    if not _comando_disponible("git"):
+        faltantes.append("git")
+    try:
+        import tkinter  # noqa: F401
+    except ImportError:
+        faltantes.append("python3-tk")
+    if not _comando_disponible("odbcinst"):
+        faltantes.append("unixodbc-dev")
+
+    if faltantes:
+        print(f"  📦 Instalando paquetes del sistema faltantes: {', '.join(faltantes)}")
+        try:
+            _ejecutar(["sudo", "apt-get", "update"])
+            _ejecutar(["sudo", "apt-get", "install", "-y"] + faltantes)
+        except Exception as e:
+            print(f"  ⚠️  No se pudieron instalar automáticamente ({e}). Instálalos a mano.")
+
+    if _odbc_driver18_presente():
+        print("  ✅ ODBC Driver 18 for SQL Server ya está instalado.")
+        return
+
+    print("  📦 Instalando 'ODBC Driver 18 for SQL Server' (repositorio oficial de Microsoft)...")
+    try:
+        _ejecutar(["sudo", "apt-get", "install", "-y", "curl", "gnupg2", "apt-transport-https"])
+        clave = subprocess.run(
+            ["curl", "-sSL", "https://packages.microsoft.com/keys/microsoft.asc"],
+            capture_output=True, check=True,
+        )
+        subprocess.run(["sudo", "tee", "/etc/apt/trusted.gpg.d/microsoft.asc"],
+                        input=clave.stdout, capture_output=True, check=True)
+        lista_repo = subprocess.run(
+            ["curl", "-sSL", "https://packages.microsoft.com/config/debian/12/prod.list"],
+            capture_output=True, check=True,
+        )
+        subprocess.run(["sudo", "tee", "/etc/apt/sources.list.d/mssql-release.list"],
+                        input=lista_repo.stdout, capture_output=True, check=True)
+        _ejecutar(["sudo", "apt-get", "update"])
+        env = os.environ.copy()
+        env["ACCEPT_EULA"] = "Y"
+        _ejecutar(["sudo", "-E", "apt-get", "install", "-y", "msodbcsql18"], env=env)
+        print("  ✅ ODBC Driver 18 for SQL Server instalado.")
+    except Exception as e:
+        print(f"  ⚠️  No se pudo instalar el driver ODBC automáticamente ({e}).")
+        print("     Instálalo a mano siguiendo: "
+              "https://learn.microsoft.com/sql/connect/odbc/linux-mac/installing-the-microsoft-odbc-driver-for-sql-server")
+
+
+def _instalar_requisitos_windows():
+    pendientes = []
+
+    if not _comando_disponible("git"):
+        if _comando_disponible("winget"):
+            try:
+                _ejecutar(["winget", "install", "--id", "Git.Git", "-e", "--silent"])
+            except Exception:
+                pendientes.append("Git — https://git-scm.com/download/win")
+        else:
+            pendientes.append("Git — https://git-scm.com/download/win")
+
+    if not _odbc_driver18_presente():
+        if _comando_disponible("winget"):
+            try:
+                _ejecutar([
+                    "winget", "install", "--id", "Microsoft.msodbcsql.18", "-e", "--silent",
+                    "--accept-package-agreements", "--accept-source-agreements",
+                ])
+            except Exception:
+                pendientes.append(
+                    "ODBC Driver 18 for SQL Server — "
+                    "https://learn.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server"
+                )
+        else:
+            pendientes.append(
+                "ODBC Driver 18 for SQL Server — "
+                "https://learn.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server"
+            )
+
+    if pendientes:
+        print("  ⚠️  No se pudieron instalar automáticamente estos requisitos; instálalos a mano:")
+        for item in pendientes:
+            print(f"     - {item}")
+
+
+def instalar_requisitos_sistema():
+    """
+    Verifica e instala (si faltan) lo necesario para correr el pipeline:
+    git, tkinter, el driver ODBC 18 de SQL Server y las dependencias de
+    Python. No requiere privilegios especiales salvo los que pida 'sudo'
+    o el instalador del sistema (Windows) de forma normal e interactiva.
+    """
+    titulo("VERIFICANDO REQUISITOS DEL SISTEMA")
+    sistema = platform.system()
+
+    if sistema == "Linux":
+        _instalar_requisitos_linux()
+    elif sistema == "Windows":
+        _instalar_requisitos_windows()
+    else:
+        print(f"  ⚠️  Sistema operativo no reconocido ({sistema}); omite verificación automática.")
+
+    _instalar_requisitos_python()
 
 # ===========================================================================
 # PASOS DEL PIPELINE
@@ -418,6 +584,8 @@ def main():
     paso_inicio = args.desde
 
     titulo("REPORTE MENSUAL ORGANON — AUTOMATIZACIÓN")
+
+    instalar_requisitos_sistema()
 
     mes, año = pedir_periodo()
     print(f"\n  ✅ Período: {MESES_ES[mes]} {año}  ({mes:02d}/{año})")
